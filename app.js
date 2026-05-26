@@ -1,480 +1,14 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>EntregaFácil – Sete Lagoas</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
-<style>
-  :root {
-    --verde: #1a7a4a; --verde-claro: #e8f5ee; --verde-medio: #2ecc71;
-    --azul: #1a3a5c; --laranja: #e67e22; --laranja-claro: #fef3e2;
-    --vermelho: #e74c3c; --vermelho-claro: #fdecea;
-    --roxo: #8b5cf6; --roxo-claro: #f3f0ff;
-    --cinza: #f4f6f8; --cinza-texto: #6b7280; --borda: #e2e8f0;
-    --branco: #ffffff; --texto: #1e2a38;
-    --sombra: 0 2px 12px rgba(0,0,0,0.08);
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'DM Sans', sans-serif; background: #f0f4f8; color: var(--texto); min-height: 100vh; }
-
-  header {
-    background: var(--azul); padding: 16px 20px;
-    display: flex; align-items: center; justify-content: space-between;
-    position: sticky; top: 0; z-index: 100;
-    box-shadow: 0 2px 16px rgba(0,0,0,0.2);
-  }
-  header h1 { font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 800; color: #fff; letter-spacing: -0.5px; }
-  header h1 span { color: var(--verde-medio); }
-  .mes-badge { background: rgba(255,255,255,0.12); color: #fff; padding: 4px 12px; border-radius: 20px; font-size: 13px; font-weight: 500; }
-  .sync-badge { font-size: 11px; color: rgba(255,255,255,0.7); display: flex; align-items: center; gap: 4px; }
-  .sync-dot { width: 7px; height: 7px; border-radius: 50%; background: #aaa; }
-  .sync-dot.ok { background: var(--verde-medio); }
-  .sync-dot.erro { background: var(--vermelho); }
-  .sync-dot.sync { background: var(--laranja); animation: pulse 1s infinite; }
-  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
-
-  nav { display: flex; background: var(--branco); border-bottom: 1px solid var(--borda); overflow-x: auto; }
-  nav button {
-    flex: 1; min-width: 60px; padding: 11px 4px;
-    background: none; border: none; border-bottom: 3px solid transparent;
-    font-family: 'DM Sans', sans-serif; font-size: 10px; font-weight: 500;
-    color: var(--cinza-texto); cursor: pointer; transition: all 0.2s;
-    display: flex; flex-direction: column; align-items: center; gap: 3px;
-  }
-  nav button svg { width: 18px; height: 18px; }
-  nav button.ativo { color: var(--verde); border-bottom-color: var(--verde); }
-
-  .pagina { display: none; padding: 16px; max-width: 600px; margin: 0 auto; }
-  .pagina.ativo { display: block; }
-
-  .grid-resumo { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
-  .card-resumo { background: var(--branco); border-radius: 14px; padding: 14px; box-shadow: var(--sombra); border: 1px solid var(--borda); }
-  .card-resumo .label { font-size: 11px; color: var(--cinza-texto); font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
-  .card-resumo .valor { font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 700; color: var(--texto); }
-  .card-resumo .valor.verde { color: var(--verde); }
-  .card-resumo .valor.laranja { color: var(--laranja); }
-  .card-resumo .valor.vermelho { color: var(--vermelho); }
-  .card-resumo .valor.roxo { color: var(--roxo); }
-
-  .card { background: var(--branco); border-radius: 16px; padding: 18px; box-shadow: var(--sombra); border: 1px solid var(--borda); margin-bottom: 14px; }
-  .card h3 { font-family: 'Syne', sans-serif; font-size: 15px; font-weight: 700; margin-bottom: 14px; color: var(--azul); }
-
-  label { font-size: 12px; font-weight: 500; color: var(--cinza-texto); display: block; margin-bottom: 4px; margin-top: 10px; }
-  label:first-of-type { margin-top: 0; }
-  input, select, textarea {
-    width: 100%; padding: 10px 12px; border: 1.5px solid var(--borda);
-    border-radius: 10px; font-family: 'DM Sans', sans-serif; font-size: 14px;
-    color: var(--texto); background: var(--cinza); transition: border 0.2s; outline: none;
-  }
-  input:focus, select:focus, textarea:focus { border-color: var(--verde); background: var(--branco); }
-  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-
-  .autocomplete-wrap { position: relative; }
-  .autocomplete-list {
-    position: absolute; top: 100%; left: 0; right: 0; z-index: 50;
-    background: var(--branco); border: 1.5px solid var(--verde);
-    border-radius: 10px; max-height: 200px; overflow-y: auto;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.12); display: none;
-  }
-  .autocomplete-list.aberto { display: block; }
-  .autocomplete-item {
-    padding: 10px 14px; cursor: pointer; font-size: 13px;
-    display: flex; justify-content: space-between; align-items: center;
-    border-bottom: 1px solid var(--borda); transition: background 0.15s;
-  }
-  .autocomplete-item:last-child { border-bottom: none; }
-  .autocomplete-item:hover { background: var(--verde-claro); }
-  .autocomplete-item .preco { font-weight: 600; color: var(--verde); font-size: 12px; }
-
-  .btn { width: 100%; padding: 13px; border: none; border-radius: 12px; font-family: 'Syne', sans-serif; font-size: 15px; font-weight: 700; cursor: pointer; transition: all 0.2s; margin-top: 14px; }
-  .btn-verde { background: var(--verde); color: #fff; }
-  .btn-verde:hover { background: #145e38; transform: translateY(-1px); }
-  .btn-laranja { background: var(--laranja); color: #fff; }
-  .btn-roxo { background: var(--roxo); color: #fff; }
-  .btn-sm { width: auto; padding: 6px 14px; font-size: 12px; margin-top: 0; border-radius: 8px; border: none; cursor: pointer; font-family: 'DM Sans', sans-serif; font-weight: 500; }
-  .btn-danger { background: var(--vermelho-claro); color: var(--vermelho); }
-  .btn-outline { background: none; border: 1.5px solid var(--borda); color: var(--cinza-texto); }
-
-  .entrega-item {
-    background: var(--branco); border-radius: 14px; padding: 14px 16px;
-    box-shadow: var(--sombra); border: 1px solid var(--borda); margin-bottom: 10px;
-    display: flex; justify-content: space-between; align-items: flex-start; gap: 10px;
-  }
-  .entrega-info .nome { font-weight: 600; font-size: 14px; }
-  .entrega-info .empresa-tag { font-size: 11px; color: var(--roxo); font-weight: 600; background: var(--roxo-claro); padding: 2px 7px; border-radius: 10px; display: inline-block; margin-top: 3px; }
-  .entrega-info .endereco { font-size: 12px; color: var(--cinza-texto); margin-top: 2px; }
-  .entrega-info .bairro-tag { display: inline-block; margin-top: 5px; padding: 2px 8px; background: var(--verde-claro); color: var(--verde); border-radius: 20px; font-size: 11px; font-weight: 600; }
-  .entrega-valor { font-family: 'Syne', sans-serif; font-size: 18px; font-weight: 700; color: var(--verde); white-space: nowrap; }
-  .entrega-acoes { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
-  .status { padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 600; }
-  .status.entregue { background: var(--verde-claro); color: var(--verde); }
-  .status.pendente { background: var(--laranja-claro); color: var(--laranja); }
-
-  .km-item { background: var(--branco); border-radius: 12px; padding: 12px 14px; border: 1px solid var(--borda); margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
-  .km-item .data { font-size: 13px; font-weight: 500; }
-  .km-item .detalhes { font-size: 12px; color: var(--cinza-texto); margin-top: 2px; }
-  .km-badge { display: flex; gap: 8px; }
-  .badge { padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; }
-  .badge.azul { background: #e8f0fb; color: #1a3a5c; }
-  .badge.laranja { background: var(--laranja-claro); color: var(--laranja); }
-  .badge.roxo { background: var(--roxo-claro); color: var(--roxo); }
-
-  /* CLIENTES */
-  .cliente-card {
-    background: var(--branco); border-radius: 14px; padding: 16px;
-    box-shadow: var(--sombra); border: 1px solid var(--borda); margin-bottom: 10px;
-  }
-  .cliente-card .cli-nome { font-family: 'Syne', sans-serif; font-size: 15px; font-weight: 700; color: var(--azul); }
-  .cliente-card .cli-end { font-size: 12px; color: var(--cinza-texto); margin-top: 3px; }
-  .cliente-card .cli-stats { display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
-  .cli-stat { background: var(--cinza); border-radius: 8px; padding: 6px 10px; font-size: 11px; }
-  .cli-stat span { font-weight: 700; color: var(--verde); display: block; font-size: 13px; }
-  .cli-hist-btn { font-size: 12px; color: var(--azul); cursor: pointer; margin-top: 8px; font-weight: 500; text-decoration: underline; }
-  .cli-historico { display: none; margin-top: 10px; border-top: 1px solid var(--borda); padding-top: 10px; }
-  .cli-historico.aberto { display: block; }
-  .cli-hist-item { font-size: 12px; padding: 5px 0; border-bottom: 1px solid var(--borda); display: flex; justify-content: space-between; }
-  .cli-hist-item:last-child { border-bottom: none; }
-
-  /* 99APP */
-  .app99-item { background: var(--branco); border-radius: 12px; padding: 12px 14px; border: 1px solid var(--borda); margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
-  .app99-valor { font-family: 'Syne', sans-serif; font-size: 18px; font-weight: 700; color: var(--roxo); }
-
-  .grafico-wrap { position: relative; width: 100%; }
-  .secao-titulo { font-family: 'Syne', sans-serif; font-size: 14px; font-weight: 700; color: var(--azul); margin-bottom: 10px; margin-top: 4px; }
-  .busca-bairro { margin-bottom: 10px; }
-  .tabela-bairros { width: 100%; border-collapse: collapse; font-size: 13px; }
-  .tabela-bairros th { background: var(--azul); color: #fff; padding: 8px 12px; text-align: left; font-weight: 600; }
-  .tabela-bairros td { padding: 8px 12px; border-bottom: 1px solid var(--borda); }
-  .tabela-bairros tr:nth-child(even) td { background: var(--cinza); }
-  .tabela-bairros .preco-td { font-weight: 700; color: var(--verde); }
-
-  .vazio { text-align: center; padding: 32px 16px; color: var(--cinza-texto); }
-  .vazio svg { width: 48px; height: 48px; margin-bottom: 8px; opacity: 0.3; }
-
-  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(100px); background: var(--azul); color: #fff; padding: 12px 20px; border-radius: 30px; font-size: 14px; font-weight: 500; box-shadow: 0 8px 24px rgba(0,0,0,0.2); transition: transform 0.3s; z-index: 999; white-space: nowrap; }
-  .toast.show { transform: translateX(-50%) translateY(0); }
-
-  .filtro-mes { display: flex; gap: 8px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
-  .filtro-mes label { margin: 0; font-size: 13px; }
-  .filtro-mes input { width: auto; padding: 7px 10px; font-size: 13px; }
-
-  .lucro-card {
-    background: linear-gradient(135deg, var(--azul) 0%, #2a5298 100%);
-    border-radius: 16px; padding: 20px; color: #fff; margin-bottom: 14px;
-  }
-  .lucro-card .titulo { font-size: 12px; opacity: 0.8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
-  .lucro-card .valor-grande { font-family: 'Syne', sans-serif; font-size: 32px; font-weight: 800; }
-  .lucro-card .detalhes-lucro { display: flex; gap: 16px; margin-top: 12px; flex-wrap: wrap; }
-  .lucro-card .detalhe { font-size: 12px; opacity: 0.85; }
-  .lucro-card .detalhe span { font-weight: 700; opacity: 1; }
-
-  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 200; align-items: center; justify-content: center; padding: 16px; }
-  .modal-overlay.aberto { display: flex; }
-  .modal { background: var(--branco); border-radius: 20px; padding: 24px; width: 100%; max-width: 480px; max-height: 80vh; overflow-y: auto; }
-  .modal h3 { font-family: 'Syne', sans-serif; font-size: 16px; font-weight: 700; color: var(--azul); margin-bottom: 16px; }
-  .modal-close { float: right; background: none; border: none; font-size: 20px; cursor: pointer; color: var(--cinza-texto); margin-top: -4px; }
-</style>
-</head>
-<body>
-
-<header>
-  <h1>Entrega<span>Fácil</span></h1>
-  <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
-    <span class="mes-badge" id="badge-mes">carregando...</span>
-    <div class="sync-badge"><div class="sync-dot" id="sync-dot"></div><span id="sync-txt">offline</span></div>
-  </div>
-</header>
-
-<nav>
-  <button class="ativo" onclick="irPara('inicio')">
-    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
-    Início
-  </button>
-  <button onclick="irPara('nova')">
-    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4"/></svg>
-    Entrega
-  </button>
-  <button onclick="irPara('clientes')">
-    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
-    Clientes
-  </button>
-  <button onclick="irPara('app99')">
-    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
-    99App
-  </button>
-  <button onclick="irPara('km')">
-    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-    KM/Comb
-  </button>
-  <button onclick="irPara('dashboard')">
-    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
-    Relatório
-  </button>
-  <button onclick="irPara('bairros')">
-    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-    Bairros
-  </button>
-</nav>
-
-<!-- ═══ INÍCIO ═══ -->
-<div class="pagina ativo" id="pg-inicio">
-  <div class="grid-resumo">
-    <div class="card-resumo">
-      <div class="label">Entregas hoje</div>
-      <div class="valor verde" id="res-hoje">0</div>
-    </div>
-    <div class="card-resumo">
-      <div class="label">Entregas hoje (R$)</div>
-      <div class="valor verde" id="res-hoje-val">R$ 0,00</div>
-    </div>
-    <div class="card-resumo">
-      <div class="label">99App hoje</div>
-      <div class="valor roxo" id="res-hoje-99">R$ 0,00</div>
-    </div>
-    <div class="card-resumo">
-      <div class="label">Total hoje</div>
-      <div class="valor verde" id="res-hoje-total">R$ 0,00</div>
-    </div>
-    <div class="card-resumo">
-      <div class="label">Entregas no mês</div>
-      <div class="valor" id="res-mes">0</div>
-    </div>
-    <div class="card-resumo">
-      <div class="label">Recebido no mês</div>
-      <div class="valor verde" id="res-mes-val">R$ 0,00</div>
-    </div>
-    <div class="card-resumo">
-      <div class="label">99App no mês</div>
-      <div class="valor roxo" id="res-mes-99">R$ 0,00</div>
-    </div>
-    <div class="card-resumo">
-      <div class="label">Total no mês</div>
-      <div class="valor verde" id="res-mes-total">R$ 0,00</div>
-    </div>
-  </div>
-  <div class="card">
-    <h3>Últimas entregas</h3>
-    <div id="lista-recentes"></div>
-  </div>
-</div>
-
-<!-- ═══ NOVA ENTREGA ═══ -->
-<div class="pagina" id="pg-nova">
-  <div class="card">
-    <h3>Registrar entrega</h3>
-
-    <label>Empresa / Cliente</label>
-    <select id="ent-cliente-id">
-      <option value="0">— Não cadastrado —</option>
-    </select>
-
-    <label>Nome do destinatário</label>
-    <input type="text" id="ent-nome" placeholder="Ex: João Silva">
-
-    <label>Endereço</label>
-    <input type="text" id="ent-endereco" placeholder="Ex: Rua das Flores, 123">
-
-    <label>Bairro</label>
-    <div class="autocomplete-wrap">
-      <input type="text" id="ent-bairro" placeholder="Digite o bairro..." autocomplete="off" oninput="filtrarBairros()" onblur="fecharListaDelay()">
-      <div class="autocomplete-list" id="lista-bairros-auto"></div>
-    </div>
-
-    <label>Valor da entrega (R$)</label>
-    <input type="number" id="ent-valor" placeholder="0,00" step="0.01">
-
-    <div class="row">
-      <div>
-        <label>Data</label>
-        <input type="date" id="ent-data">
-      </div>
-      <div>
-        <label>Status</label>
-        <select id="ent-status">
-          <option value="entregue">Entregue ✓</option>
-          <option value="pendente">Pendente ⏳</option>
-        </select>
-      </div>
-    </div>
-
-    <label>Observação (opcional)</label>
-    <textarea id="ent-obs" rows="2" placeholder="Ex: ligar antes de entregar..." style="resize:none;"></textarea>
-
-    <button class="btn btn-verde" onclick="salvarEntrega()">Salvar entrega</button>
-  </div>
-
-  <div class="card">
-    <h3>Entregas do dia</h3>
-    <div id="lista-dia"></div>
-  </div>
-</div>
-
-<!-- ═══ CLIENTES ═══ -->
-<div class="pagina" id="pg-clientes">
-  <div class="card">
-    <h3>Cadastrar Empresa / Cliente</h3>
-    <label>Nome da Empresa</label>
-    <input type="text" id="cli-nome" placeholder="Ex: Farmácia Central">
-    <label>Endereço</label>
-    <input type="text" id="cli-end" placeholder="Ex: Rua Principal, 100">
-    <label>Telefone (opcional)</label>
-    <input type="text" id="cli-tel" placeholder="Ex: (31) 99999-9999">
-    <label>Observações (opcional)</label>
-    <textarea id="cli-obs" rows="2" placeholder="Ex: pagar todo mês no dia 5..." style="resize:none;"></textarea>
-    <button class="btn btn-verde" onclick="salvarCliente()">Cadastrar Empresa</button>
-  </div>
-  <div id="lista-clientes"></div>
-</div>
-
-<!-- ═══ 99APP ═══ -->
-<div class="pagina" id="pg-app99">
-  <div class="card">
-    <h3>Registrar ganho no 99App</h3>
-    <label>Valor total do dia (R$)</label>
-    <input type="number" id="app99-valor" placeholder="0,00" step="0.01">
-    <label>Data</label>
-    <input type="date" id="app99-data">
-    <label>Observação (opcional)</label>
-    <input type="text" id="app99-obs" placeholder="Ex: 12 corridas">
-    <button class="btn btn-roxo" onclick="salvarApp99()">Salvar ganho 99App</button>
-  </div>
-  <div class="card">
-    <h3>Histórico 99App</h3>
-    <div id="lista-app99"></div>
-  </div>
-</div>
-
-<!-- ═══ KM E COMBUSTÍVEL ═══ -->
-<div class="pagina" id="pg-km">
-  <div class="card">
-    <h3>Registrar KM e combustível</h3>
-    <div class="row">
-      <div>
-        <label>Data</label>
-        <input type="date" id="km-data">
-      </div>
-      <div>
-        <label>KM rodados</label>
-        <input type="number" id="km-km" placeholder="0">
-      </div>
-    </div>
-    <div class="row">
-      <div>
-        <label>Litros abastecidos</label>
-        <input type="number" id="km-litros" placeholder="0.00" step="0.01">
-      </div>
-      <div>
-        <label>Valor total (R$)</label>
-        <input type="number" id="km-valor" placeholder="0.00" step="0.01">
-      </div>
-    </div>
-    <div id="km-eficiencia" style="margin-top:10px;padding:10px;background:var(--verde-claro);border-radius:10px;font-size:13px;display:none;color:var(--verde);font-weight:600;"></div>
-    <button class="btn btn-verde" onclick="salvarKM()">Salvar registro</button>
-  </div>
-  <div class="card">
-    <h3>Histórico de abastecimentos</h3>
-    <div id="lista-km"></div>
-  </div>
-</div>
-
-<!-- ═══ DASHBOARD ═══ -->
-<div class="pagina" id="pg-dashboard">
-  <div class="filtro-mes">
-    <label>Mês/Ano:</label>
-    <input type="month" id="filtro-mes-dash" onchange="renderDashboard()">
-  </div>
-
-  <div class="lucro-card">
-    <div class="titulo">Lucro real do mês</div>
-    <div class="valor-grande" id="dash-lucro">R$ 0,00</div>
-    <div class="detalhes-lucro">
-      <div class="detalhe">Entregas: <span id="dash-fat">R$ 0</span></div>
-      <div class="detalhe">99App: <span id="dash-99">R$ 0</span></div>
-      <div class="detalhe">Combustível: <span id="dash-comb">R$ 0</span></div>
-      <div class="detalhe">Nº Entregas: <span id="dash-nent">0</span></div>
-    </div>
-  </div>
-
-  <div class="grid-resumo">
-    <div class="card-resumo">
-      <div class="label">KM rodados</div>
-      <div class="valor" id="dash-km">0 km</div>
-    </div>
-    <div class="card-resumo">
-      <div class="label">KM por litro</div>
-      <div class="valor verde" id="dash-kml">— km/L</div>
-    </div>
-    <div class="card-resumo">
-      <div class="label">Custo/entrega</div>
-      <div class="valor laranja" id="dash-custo">R$ 0</div>
-    </div>
-    <div class="card-resumo">
-      <div class="label">Ticket médio</div>
-      <div class="valor" id="dash-ticket">R$ 0</div>
-    </div>
-  </div>
-
-  <div class="card">
-    <p class="secao-titulo">Faturamento por dia (Entregas + 99App)</p>
-    <div class="grafico-wrap" style="height:200px;"><canvas id="grafico-fat"></canvas></div>
-  </div>
-  <div class="card">
-    <p class="secao-titulo">Entregas por bairro</p>
-    <div class="grafico-wrap" style="height:200px;"><canvas id="grafico-bairros"></canvas></div>
-  </div>
-  <div class="card">
-    <p class="secao-titulo">Quantidade de entregas por dia</p>
-    <div class="grafico-wrap" style="height:180px;"><canvas id="grafico-qtd"></canvas></div>
-  </div>
-  <div class="card">
-    <p class="secao-titulo">Faturamento por empresa</p>
-    <div class="grafico-wrap" style="height:180px;"><canvas id="grafico-empresas"></canvas></div>
-  </div>
-</div>
-
-<!-- ═══ TABELA BAIRROS ═══ -->
-<div class="pagina" id="pg-bairros">
-  <div class="card">
-    <h3>Tabela de preços – Sete Lagoas</h3>
-    <div class="busca-bairro">
-      <input type="text" placeholder="Buscar bairro..." oninput="filtrarTabelaBairros(this.value)">
-    </div>
-    <div style="overflow-x:auto;">
-      <table class="tabela-bairros">
-        <thead><tr><th>Bairro</th><th>Preço</th></tr></thead>
-        <tbody id="tbody-bairros"></tbody>
-      </table>
-    </div>
-  </div>
-</div>
-
-<!-- Modal histórico cliente -->
-<div class="modal-overlay" id="modal-historico">
-  <div class="modal">
-    <button class="modal-close" onclick="fecharModal()">✕</button>
-    <h3 id="modal-titulo">Histórico</h3>
-    <div id="modal-conteudo"></div>
-  </div>
-</div>
-
-<div class="toast" id="toast"></div>
-
-<script>
 // ═══════════════════════════════════════════════════════
 //  CONFIGURAÇÃO SUPABASE
 // ═══════════════════════════════════════════════════════
-const SUPABASE_URL = 'https://txedjzdznokdrjtpawaf.supabase.co/rest/v1/';
+const SUPABASE_URL = 'https://txedjzdznokdrjtpawaf.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR4ZWRqemR6bm9rZHJqdHBhd2FmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg3OTQ3OTMsImV4cCI6MjA5NDM3MDc5M30.ZLNvtExbctOdU2A_y2ElZbAmD-ev6FGeyzNrkGlL9T0';
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ═══════════════════════════════════════════════════════
-//  TABELA DE BAIRROS
+//  TABELA DE BAIRROS PADRÃO
 // ═══════════════════════════════════════════════════════
-const BAIRROS = {
+const BAIRROS_PADRAO = {
   "Acaiaca":10,"Alvorada":10,"Barreiro":25,"Bela Vista":15,"Bela Vista 3":15,
   "Belo Vale":12,"Bernardo Valadares":10,"Boa Vista":8,"Bom Jardim":8,
   "Bouganville I e II":20,"Brasília":10,"Braz Filizola":8,"Canaã":8,"Canadá":12,
@@ -496,21 +30,30 @@ const BAIRROS = {
   "Vapabuçu":9,"Varzea":9,"Vale do Sol":10,"Verde Vale":12
 };
 
+// Tabela ativa (começa com o padrão, pode ser substituída pelo perfil do usuário)
+let BAIRROS = { ...BAIRROS_PADRAO };
+
+// ═══════════════════════════════════════════════════════
+//  ESTADO GLOBAL
+// ═══════════════════════════════════════════════════════
+let usuarioAtual    = null;
+let perfilAtual     = null;
+let entregas        = [];
+let clientes        = [];
+let registrosKM     = [];
+let ganhos99        = [];
+let graficoFat = null, graficoBairros = null, graficoQtd = null, graficoEmpresas = null;
+let modoOnline      = false;
+let nomeAppCorridas = '99App';  // valor padrão, atualizado pelo perfil
+
 // ═══════════════════════════════════════════════════════
 //  STORAGE LOCAL (fallback offline)
 // ═══════════════════════════════════════════════════════
+function chaveLocal(sufixo) {
+  return 'ef_' + (usuarioAtual ? usuarioAtual.id.slice(0, 8) : 'anon') + '_' + sufixo;
+}
 function salvarLocal(chave, dados) { try { localStorage.setItem(chave, JSON.stringify(dados)); } catch(e){} }
 function carregarLocal(chave, padrao) { try { return JSON.parse(localStorage.getItem(chave)) || padrao; } catch(e) { return padrao; } }
-
-// ═══════════════════════════════════════════════════════
-//  DADOS EM MEMÓRIA
-// ═══════════════════════════════════════════════════════
-let entregas    = carregarLocal('ef_entregas', []);
-let clientes    = carregarLocal('ef_clientes', []);
-let registrosKM = carregarLocal('ef_km', []);
-let ganhos99    = carregarLocal('ef_99', []);
-let graficoFat = null, graficoBairros = null, graficoQtd = null, graficoEmpresas = null;
-let modoOnline  = false;
 
 // ═══════════════════════════════════════════════════════
 //  DATAS E FORMATAÇÃO
@@ -526,16 +69,92 @@ function formatarMoeda(v) { return 'R$ ' + Number(v||0).toFixed(2).replace('.','
 function setSyncStatus(estado) {
   const dot = document.getElementById('sync-dot');
   const txt = document.getElementById('sync-txt');
+  if(!dot || !txt) return;
   dot.className = 'sync-dot ' + estado;
   txt.textContent = estado === 'ok' ? 'nuvem ✓' : estado === 'sync' ? 'salvando...' : estado === 'erro' ? 'erro nuvem' : 'offline';
 }
 
 // ═══════════════════════════════════════════════════════
-//  INIT
+//  AUTENTICAÇÃO
 // ═══════════════════════════════════════════════════════
-window.onload = async () => {
-  document.getElementById('ent-data').value = hoje();
-  document.getElementById('km-data').value = hoje();
+function mostrarLogin() {
+  document.getElementById('form-login-card').style.display = 'block';
+  document.getElementById('form-cadastro-card').style.display = 'none';
+  document.getElementById('login-erro').style.display = 'none';
+}
+
+function mostrarCadastro() {
+  document.getElementById('form-login-card').style.display = 'none';
+  document.getElementById('form-cadastro-card').style.display = 'block';
+  document.getElementById('login-erro').style.display = 'none';
+}
+
+function mostrarErroLogin(msg) {
+  const el = document.getElementById('login-erro');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+async function fazerLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const senha  = document.getElementById('login-senha').value;
+  if(!email || !senha) { mostrarErroLogin('Preencha e-mail e senha.'); return; }
+
+  const { data, error } = await db.auth.signInWithPassword({ email, password: senha });
+  if(error) { mostrarErroLogin('❌ ' + traduzirErroAuth(error.message)); return; }
+  await iniciarSessao(data.user);
+}
+
+async function fazerCadastro() {
+  const nome   = document.getElementById('cad-nome').value.trim();
+  const email  = document.getElementById('cad-email').value.trim();
+  const senha  = document.getElementById('cad-senha').value;
+  const senha2 = document.getElementById('cad-senha2').value;
+
+  if(!nome || !email || !senha) { mostrarErroLogin('Preencha todos os campos.'); return; }
+  if(senha !== senha2) { mostrarErroLogin('As senhas não coincidem.'); return; }
+  if(senha.length < 6) { mostrarErroLogin('A senha precisa ter pelo menos 6 caracteres.'); return; }
+
+  const { data, error } = await db.auth.signUp({
+    email, password: senha,
+    options: { data: { nome_exibicao: nome } }
+  });
+  if(error) { mostrarErroLogin('❌ ' + traduzirErroAuth(error.message)); return; }
+  mostrarErroLogin('✅ Conta criada! Verifique seu e-mail e faça login.');
+  mostrarLogin();
+}
+
+async function fazerLogout() {
+  await db.auth.signOut();
+  usuarioAtual = null;
+  perfilAtual  = null;
+  entregas = []; clientes = []; registrosKM = []; ganhos99 = [];
+  document.getElementById('tela-app').style.display = 'none';
+  document.getElementById('tela-login').style.display = 'flex';
+}
+
+function traduzirErroAuth(msg) {
+  if(msg.includes('Invalid login')) return 'E-mail ou senha incorretos.';
+  if(msg.includes('Email not confirmed')) return 'Confirme seu e-mail antes de entrar.';
+  if(msg.includes('already registered')) return 'Este e-mail já está cadastrado.';
+  if(msg.includes('Password should be')) return 'Senha muito fraca (mínimo 6 caracteres).';
+  return msg;
+}
+
+async function iniciarSessao(user) {
+  usuarioAtual = user;
+  document.getElementById('tela-login').style.display = 'none';
+  document.getElementById('tela-app').style.display = 'block';
+
+  // Preencher info perfil no header
+  const emailExib = document.getElementById('config-email-exibicao');
+  const avatar    = document.getElementById('config-avatar');
+  if(emailExib) emailExib.textContent = user.email;
+  if(avatar) avatar.textContent = user.email[0].toUpperCase();
+
+  // Inicializar campos de data
+  document.getElementById('ent-data').value   = hoje();
+  document.getElementById('km-data').value    = hoje();
   document.getElementById('app99-data').value = hoje();
   document.getElementById('filtro-mes-dash').value = mesAtual();
 
@@ -545,12 +164,163 @@ window.onload = async () => {
 
   ['km-km','km-litros'].forEach(id => document.getElementById(id).addEventListener('input', calcularEficiencia));
 
-  renderTabela();
-  atualizarInterface();
-
-  // Tentar carregar da nuvem
+  await carregarPerfil();
   await sincronizarDaCloud();
-};
+}
+
+// ═══════════════════════════════════════════════════════
+//  PERFIL DO USUÁRIO (app + bairros)
+// ═══════════════════════════════════════════════════════
+async function carregarPerfil() {
+  if(!usuarioAtual) return;
+  const { data, error } = await db.from('perfis').select('*').eq('id', usuarioAtual.id).single();
+
+  if(error || !data) {
+    // Perfil ainda não existe — criar
+    await db.from('perfis').upsert({ id: usuarioAtual.id, nome_exibicao: usuarioAtual.email, app_corridas: '99App', bairros_custom: {} });
+    perfilAtual = { app_corridas: '99App', bairros_custom: {} };
+  } else {
+    perfilAtual = data;
+  }
+
+  // Aplicar app de corridas
+  nomeAppCorridas = perfilAtual.app_corridas || '99App';
+  atualizarNomeApp();
+
+  // Aplicar bairros personalizados (se existirem)
+  const custom = perfilAtual.bairros_custom || {};
+  if(Object.keys(custom).length > 0) {
+    BAIRROS = custom;
+  } else {
+    BAIRROS = { ...BAIRROS_PADRAO };
+  }
+
+  // Preencher select de config
+  const sel = document.getElementById('config-app-corridas');
+  if(sel) {
+    const opcoesConhecidas = ['99App','Uber','iFood','Rappi','Loggi','Lalamove','InDrive'];
+    if(opcoesConhecidas.includes(nomeAppCorridas)) {
+      sel.value = nomeAppCorridas;
+      document.getElementById('config-app-custom-wrap').style.display = 'none';
+    } else {
+      sel.value = 'Outro';
+      document.getElementById('config-app-custom-wrap').style.display = 'block';
+      document.getElementById('config-app-custom').value = nomeAppCorridas;
+    }
+  }
+
+  renderTabelaConfig();
+}
+
+function atualizarNomeApp() {
+  const labels = [
+    'nav-label-app99','titulo-app-corridas','titulo-app-corridas2',
+    'label-app-hoje','label-app-mes','dash-label-99'
+  ];
+  labels.forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.textContent = nomeAppCorridas;
+  });
+  document.querySelectorAll('.label-app-dash').forEach(el => el.textContent = nomeAppCorridas);
+}
+
+function previewAppCorridas() {
+  const sel = document.getElementById('config-app-corridas');
+  const customWrap = document.getElementById('config-app-custom-wrap');
+  customWrap.style.display = sel.value === 'Outro' ? 'block' : 'none';
+}
+
+async function salvarConfigApp() {
+  const sel = document.getElementById('config-app-corridas');
+  let nomeApp = sel.value === 'Outro'
+    ? (document.getElementById('config-app-custom').value.trim() || '99App')
+    : sel.value;
+
+  const { error } = await db.from('perfis').update({ app_corridas: nomeApp }).eq('id', usuarioAtual.id);
+  if(error) { mostrarToast('❌ Erro ao salvar: ' + error.message); return; }
+
+  nomeAppCorridas = nomeApp;
+  atualizarNomeApp();
+  mostrarToast('✅ App atualizado para ' + nomeApp + '!');
+}
+
+// ═══════════════════════════════════════════════════════
+//  BAIRROS PERSONALIZADOS
+// ═══════════════════════════════════════════════════════
+let bairrosEditados = {};  // cópia de trabalho durante edição
+
+function renderTabelaConfig(filtro = '') {
+  bairrosEditados = { ...BAIRROS };
+  const tbody = document.getElementById('tbody-config-bairros');
+  if(!tbody) return;
+
+  const lista = Object.keys(bairrosEditados).sort().filter(b =>
+    b.toLowerCase().includes(filtro.toLowerCase())
+  );
+
+  tbody.innerHTML = lista.map(b => `
+    <tr>
+      <td>${b}</td>
+      <td>
+        <input type="number" value="${bairrosEditados[b]}" step="0.01" min="0"
+          style="width:80px;padding:4px 8px;border:1.5px solid var(--borda);border-radius:6px;font-size:13px;background:var(--cinza);"
+          onchange="bairrosEditados['${b.replace(/'/g,"\\'")}'] = parseFloat(this.value)||0">
+      </td>
+      <td>
+        <button class="btn-sm btn-danger" onclick="removerBairroConfig('${b.replace(/'/g,"\\'")}')">✕</button>
+      </td>
+    </tr>`).join('');
+}
+
+function filtrarTabelaConfig(q) {
+  renderTabelaConfig(q);
+}
+
+function adicionarBairroCustom() {
+  const nome  = document.getElementById('novo-bairro-nome').value.trim();
+  const valor = parseFloat(document.getElementById('novo-bairro-valor').value) || 0;
+  if(!nome) { mostrarToast('⚠️ Informe o nome do bairro'); return; }
+  if(valor <= 0) { mostrarToast('⚠️ Informe um valor válido'); return; }
+
+  BAIRROS[nome] = valor;
+  bairrosEditados[nome] = valor;
+  document.getElementById('novo-bairro-nome').value = '';
+  document.getElementById('novo-bairro-valor').value = '';
+  renderTabelaConfig(document.getElementById('busca-config-bairros').value || '');
+  mostrarToast('✅ Bairro adicionado! Clique em Salvar tabela.');
+}
+
+function removerBairroConfig(nome) {
+  delete BAIRROS[nome];
+  delete bairrosEditados[nome];
+  renderTabelaConfig(document.getElementById('busca-config-bairros').value || '');
+}
+
+async function salvarBairrosCustom() {
+  // Capturar valores editados nos inputs
+  const inputs = document.querySelectorAll('#tbody-config-bairros input[type="number"]');
+  const nomes  = document.querySelectorAll('#tbody-config-bairros tr td:first-child');
+  inputs.forEach((inp, i) => {
+    const nome = nomes[i]?.textContent;
+    if(nome) bairrosEditados[nome] = parseFloat(inp.value) || 0;
+  });
+
+  BAIRROS = { ...bairrosEditados };
+
+  const { error } = await db.from('perfis').update({ bairros_custom: BAIRROS }).eq('id', usuarioAtual.id);
+  if(error) { mostrarToast('❌ Erro ao salvar bairros: ' + error.message); return; }
+
+  mostrarToast('✅ Tabela de bairros salva!');
+  renderTabelaConfig();
+}
+
+function resetarBairrosParaPadrao() {
+  if(!confirm('Restaurar a tabela padrão de Sete Lagoas? Suas modificações serão perdidas.')) return;
+  BAIRROS = { ...BAIRROS_PADRAO };
+  bairrosEditados = { ...BAIRROS_PADRAO };
+  renderTabelaConfig();
+  mostrarToast('↺ Tabela restaurada para o padrão. Clique em Salvar tabela para confirmar.');
+}
 
 // ═══════════════════════════════════════════════════════
 //  SINCRONIZAÇÃO COM SUPABASE
@@ -558,32 +328,40 @@ window.onload = async () => {
 async function sincronizarDaCloud() {
   setSyncStatus('sync');
   try {
+    const uid = usuarioAtual.id;
     const [rEnt, rCli, rKM, r99] = await Promise.all([
-      db.from('entregas').select('*').order('data', { ascending: false }),
-      db.from('clientes').select('*').order('nome'),
-      db.from('registros_km').select('*').order('data', { ascending: false }),
-      db.from('ganhos_99').select('*').order('data', { ascending: false })
+      db.from('entregas').select('*').eq('user_id', uid).order('data', { ascending: false }),
+      db.from('clientes').select('*').eq('user_id', uid).order('nome'),
+      db.from('registros_km').select('*').eq('user_id', uid).order('data', { ascending: false }),
+      db.from('ganhos_99').select('*').eq('user_id', uid).order('data', { ascending: false })
     ]);
 
-    if(rEnt.error || rCli.error || rKM.error || r99.error) throw new Error('Erro ao buscar');
+    if(rEnt.error || rCli.error || rKM.error || r99.error) {
+      throw new Error(JSON.stringify({ entregas: rEnt.error, clientes: rCli.error, km: rKM.error, app99: r99.error }));
+    }
 
     entregas    = rEnt.data || [];
     clientes    = rCli.data || [];
     registrosKM = rKM.data  || [];
     ganhos99    = r99.data  || [];
 
-    salvarLocal('ef_entregas', entregas);
-    salvarLocal('ef_clientes', clientes);
-    salvarLocal('ef_km', registrosKM);
-    salvarLocal('ef_99', ganhos99);
+    salvarLocal(chaveLocal('entregas'), entregas);
+    salvarLocal(chaveLocal('clientes'), clientes);
+    salvarLocal(chaveLocal('km'), registrosKM);
+    salvarLocal(chaveLocal('99'), ganhos99);
 
     modoOnline = true;
     setSyncStatus('ok');
     atualizarInterface();
   } catch(e) {
-    modoOnline = false;
+    // Tentar carregar do cache local
+    entregas    = carregarLocal(chaveLocal('entregas'), []);
+    clientes    = carregarLocal(chaveLocal('clientes'), []);
+    registrosKM = carregarLocal(chaveLocal('km'), []);
+    ganhos99    = carregarLocal(chaveLocal('99'), []);
+    modoOnline  = false;
     setSyncStatus('erro');
-    console.warn('Supabase indisponível, usando dados locais:', e.message);
+    console.error('Erro Supabase:', e);
     atualizarInterface();
   }
 }
@@ -605,11 +383,12 @@ function irPara(pg) {
   document.querySelectorAll('.pagina').forEach(p => p.classList.remove('ativo'));
   document.querySelectorAll('nav button').forEach(b => b.classList.remove('ativo'));
   document.getElementById('pg-' + pg).classList.add('ativo');
-  const idx = ['inicio','nova','clientes','app99','km','dashboard','bairros'].indexOf(pg);
+  const idx = ['inicio','nova','clientes','app99','km','dashboard','bairros','config'].indexOf(pg);
   if(idx >= 0) document.querySelectorAll('nav button')[idx].classList.add('ativo');
   if(pg === 'dashboard') renderDashboard();
   if(pg === 'inicio') renderInicio();
   if(pg === 'nova') renderListaDia();
+  if(pg === 'config') renderTabelaConfig();
 }
 
 // ═══════════════════════════════════════════════════════
@@ -629,7 +408,7 @@ function filtrarBairros() {
 }
 function selecionarBairro(b) {
   document.getElementById('ent-bairro').value = b;
-  document.getElementById('ent-valor').value = BAIRROS[b].toFixed(2);
+  document.getElementById('ent-valor').value = BAIRROS[b] ? BAIRROS[b].toFixed(2) : '';
   document.getElementById('lista-bairros-auto').classList.remove('aberto');
 }
 function fecharListaDelay() { setTimeout(() => document.getElementById('lista-bairros-auto').classList.remove('aberto'), 200); }
@@ -647,13 +426,13 @@ function atualizarSelectClientes() {
 //  SALVAR ENTREGA
 // ═══════════════════════════════════════════════════════
 async function salvarEntrega() {
-  const nome     = document.getElementById('ent-nome').value.trim();
-  const endereco = document.getElementById('ent-endereco').value.trim();
-  const bairro   = document.getElementById('ent-bairro').value.trim();
-  const valor    = parseFloat(document.getElementById('ent-valor').value) || 0;
-  const data     = document.getElementById('ent-data').value;
-  const status   = document.getElementById('ent-status').value;
-  const obs      = document.getElementById('ent-obs').value.trim();
+  const nome      = document.getElementById('ent-nome').value.trim();
+  const endereco  = document.getElementById('ent-endereco').value.trim();
+  const bairro    = document.getElementById('ent-bairro').value.trim();
+  const valor     = parseFloat(document.getElementById('ent-valor').value) || 0;
+  const data      = document.getElementById('ent-data').value;
+  const status    = document.getElementById('ent-status').value;
+  const obs       = document.getElementById('ent-obs').value.trim();
   const clienteId = document.getElementById('ent-cliente-id').value;
 
   if(!bairro || !data) { mostrarToast('⚠️ Preencha bairro e data'); return; }
@@ -661,7 +440,8 @@ async function salvarEntrega() {
   const obj = {
     nome: nome || 'Destinatário não informado',
     endereco, bairro, valor, data, status, obs,
-    cliente_id: clienteId === '0' ? null : parseInt(clienteId)
+    cliente_id: clienteId === '0' ? null : parseInt(clienteId),
+    user_id: usuarioAtual.id
   };
 
   if(modoOnline) {
@@ -673,7 +453,7 @@ async function salvarEntrega() {
   } else {
     obj.id = Date.now();
     entregas.unshift(obj);
-    salvarLocal('ef_entregas', entregas);
+    salvarLocal(chaveLocal('entregas'), entregas);
   }
 
   ['ent-nome','ent-endereco','ent-bairro','ent-valor','ent-obs'].forEach(id => document.getElementById(id).value = '');
@@ -693,7 +473,7 @@ async function salvarCliente() {
 
   if(!nome) { mostrarToast('⚠️ Informe o nome da empresa'); return; }
 
-  const obj = { nome, endereco: end, telefone: tel, observacoes: obs };
+  const obj = { nome, endereco: end, telefone: tel, observacoes: obs, user_id: usuarioAtual.id };
 
   if(modoOnline) {
     setSyncStatus('sync');
@@ -706,7 +486,7 @@ async function salvarCliente() {
     obj.id = Date.now();
     clientes.push(obj);
     clientes.sort((a,b) => a.nome.localeCompare(b.nome));
-    salvarLocal('ef_clientes', clientes);
+    salvarLocal(chaveLocal('clientes'), clientes);
   }
 
   ['cli-nome','cli-end','cli-tel','cli-obs'].forEach(id => document.getElementById(id).value = '');
@@ -715,7 +495,7 @@ async function salvarCliente() {
 }
 
 // ═══════════════════════════════════════════════════════
-//  SALVAR 99APP
+//  SALVAR APP CORRIDAS (99App / Uber / etc)
 // ═══════════════════════════════════════════════════════
 async function salvarApp99() {
   const valor = parseFloat(document.getElementById('app99-valor').value) || 0;
@@ -724,7 +504,7 @@ async function salvarApp99() {
 
   if(!data || valor === 0) { mostrarToast('⚠️ Informe o valor e a data'); return; }
 
-  const obj = { valor, data, observacoes: obs };
+  const obj = { valor, data, observacoes: obs, user_id: usuarioAtual.id };
 
   if(modoOnline) {
     setSyncStatus('sync');
@@ -735,12 +515,12 @@ async function salvarApp99() {
   } else {
     obj.id = Date.now();
     ganhos99.unshift(obj);
-    salvarLocal('ef_99', ganhos99);
+    salvarLocal(chaveLocal('99'), ganhos99);
   }
 
   document.getElementById('app99-valor').value = '';
   document.getElementById('app99-obs').value = '';
-  mostrarToast('✅ Ganho 99App salvo!');
+  mostrarToast('✅ Ganho ' + nomeAppCorridas + ' salvo!');
   renderListaApp99(); renderInicio();
 }
 
@@ -755,7 +535,7 @@ async function salvarKM() {
 
   if(!data || km === 0) { mostrarToast('⚠️ Informe a data e os KM'); return; }
 
-  const obj = { data, km, litros, valor };
+  const obj = { data, km, litros, valor, user_id: usuarioAtual.id };
 
   if(modoOnline) {
     setSyncStatus('sync');
@@ -766,7 +546,7 @@ async function salvarKM() {
   } else {
     obj.id = Date.now();
     registrosKM.unshift(obj);
-    salvarLocal('ef_km', registrosKM);
+    salvarLocal(chaveLocal('km'), registrosKM);
   }
 
   ['km-km','km-litros','km-valor'].forEach(id => document.getElementById(id).value = '');
@@ -790,36 +570,34 @@ function calcularEficiencia() {
 // ═══════════════════════════════════════════════════════
 async function excluirEntrega(id) {
   if(!confirm('Excluir esta entrega?')) return;
-  if(modoOnline) {
-    await db.from('entregas').delete().eq('id', id);
-  }
+  if(modoOnline) await db.from('entregas').delete().eq('id', id).eq('user_id', usuarioAtual.id);
   entregas = entregas.filter(e => e.id !== id);
-  salvarLocal('ef_entregas', entregas);
+  salvarLocal(chaveLocal('entregas'), entregas);
   renderListaDia(); renderInicio();
   mostrarToast('🗑️ Entrega removida');
 }
 
 async function excluirKM(id) {
-  if(modoOnline) await db.from('registros_km').delete().eq('id', id);
+  if(modoOnline) await db.from('registros_km').delete().eq('id', id).eq('user_id', usuarioAtual.id);
   registrosKM = registrosKM.filter(r => r.id !== id);
-  salvarLocal('ef_km', registrosKM);
+  salvarLocal(chaveLocal('km'), registrosKM);
   renderListaKM();
   mostrarToast('🗑️ Registro removido');
 }
 
 async function excluirApp99(id) {
-  if(modoOnline) await db.from('ganhos_99').delete().eq('id', id);
+  if(modoOnline) await db.from('ganhos_99').delete().eq('id', id).eq('user_id', usuarioAtual.id);
   ganhos99 = ganhos99.filter(g => g.id !== id);
-  salvarLocal('ef_99', ganhos99);
+  salvarLocal(chaveLocal('99'), ganhos99);
   renderListaApp99(); renderInicio();
   mostrarToast('🗑️ Registro removido');
 }
 
 async function excluirCliente(id) {
   if(!confirm('Excluir esta empresa? As entregas vinculadas não serão apagadas.')) return;
-  if(modoOnline) await db.from('clientes').delete().eq('id', id);
+  if(modoOnline) await db.from('clientes').delete().eq('id', id).eq('user_id', usuarioAtual.id);
   clientes = clientes.filter(c => c.id !== id);
-  salvarLocal('ef_clientes', clientes);
+  salvarLocal(chaveLocal('clientes'), clientes);
   renderClientes(); atualizarSelectClientes();
   mostrarToast('🗑️ Empresa removida');
 }
@@ -828,8 +606,8 @@ async function toggleStatus(id) {
   const e = entregas.find(x => x.id === id);
   if(!e) return;
   e.status = e.status === 'entregue' ? 'pendente' : 'entregue';
-  if(modoOnline) await db.from('entregas').update({ status: e.status }).eq('id', id);
-  salvarLocal('ef_entregas', entregas);
+  if(modoOnline) await db.from('entregas').update({ status: e.status }).eq('id', id).eq('user_id', usuarioAtual.id);
+  salvarLocal(chaveLocal('entregas'), entregas);
   renderListaDia(); renderInicio();
 }
 
@@ -847,13 +625,13 @@ function renderInicio() {
   const app99Hoje = ganhos99.filter(g => g.data === hj).reduce((s,g) => s + (g.valor||0), 0);
   const app99Mes  = ganhos99.filter(g => g.data && g.data.startsWith(mes)).reduce((s,g) => s + (g.valor||0), 0);
 
-  document.getElementById('res-hoje').textContent = entHoje.length;
+  document.getElementById('res-hoje').textContent     = entHoje.length;
   document.getElementById('res-hoje-val').textContent = formatarMoeda(valHoje);
-  document.getElementById('res-hoje-99').textContent = formatarMoeda(app99Hoje);
+  document.getElementById('res-hoje-99').textContent  = formatarMoeda(app99Hoje);
   document.getElementById('res-hoje-total').textContent = formatarMoeda(valHoje + app99Hoje);
-  document.getElementById('res-mes').textContent = entMes.length;
-  document.getElementById('res-mes-val').textContent = formatarMoeda(valMes);
-  document.getElementById('res-mes-99').textContent = formatarMoeda(app99Mes);
+  document.getElementById('res-mes').textContent      = entMes.length;
+  document.getElementById('res-mes-val').textContent  = formatarMoeda(valMes);
+  document.getElementById('res-mes-99').textContent   = formatarMoeda(app99Mes);
   document.getElementById('res-mes-total').textContent = formatarMoeda(valMes + app99Mes);
 
   const rec = document.getElementById('lista-recentes');
@@ -963,17 +741,17 @@ function renderListaKM() {
 //  DASHBOARD
 // ═══════════════════════════════════════════════════════
 function renderDashboard() {
-  const mes     = document.getElementById('filtro-mes-dash').value || mesAtual();
-  const entMes  = entregas.filter(e => e.data && e.data.startsWith(mes));
-  const kmMes   = registrosKM.filter(r => r.data && r.data.startsWith(mes));
+  const mes      = document.getElementById('filtro-mes-dash').value || mesAtual();
+  const entMes   = entregas.filter(e => e.data && e.data.startsWith(mes));
+  const kmMes    = registrosKM.filter(r => r.data && r.data.startsWith(mes));
   const app99Mes = ganhos99.filter(g => g.data && g.data.startsWith(mes));
 
-  const faturado   = entMes.reduce((s,e) => s + (e.valor||0), 0);
-  const total99    = app99Mes.reduce((s,g) => s + (g.valor||0), 0);
-  const custoComb  = kmMes.reduce((s,r) => s + (r.valor||0), 0);
-  const totalKM    = kmMes.reduce((s,r) => s + (r.km||0), 0);
+  const faturado    = entMes.reduce((s,e) => s + (e.valor||0), 0);
+  const total99     = app99Mes.reduce((s,g) => s + (g.valor||0), 0);
+  const custoComb   = kmMes.reduce((s,r) => s + (r.valor||0), 0);
+  const totalKM     = kmMes.reduce((s,r) => s + (r.km||0), 0);
   const totalLitros = kmMes.reduce((s,r) => s + (r.litros||0), 0);
-  const lucro      = faturado + total99 - custoComb;
+  const lucro       = faturado + total99 - custoComb;
 
   document.getElementById('dash-lucro').textContent  = formatarMoeda(lucro);
   document.getElementById('dash-fat').textContent    = formatarMoeda(faturado);
@@ -985,7 +763,7 @@ function renderDashboard() {
   document.getElementById('dash-custo').textContent  = entMes.length > 0 ? formatarMoeda(custoComb/entMes.length) : 'R$ 0';
   document.getElementById('dash-ticket').textContent = entMes.length > 0 ? formatarMoeda(faturado/entMes.length) : 'R$ 0';
 
-  // Gráfico: faturamento por dia (entregas + 99app combinados)
+  // Gráfico: faturamento por dia
   const diasMap = {};
   entMes.forEach(e => { diasMap[e.data] = (diasMap[e.data]||{ent:0,app99:0}); diasMap[e.data].ent += (e.valor||0); });
   app99Mes.forEach(g => { diasMap[g.data] = (diasMap[g.data]||{ent:0,app99:0}); diasMap[g.data].app99 += (g.valor||0); });
@@ -998,7 +776,7 @@ function renderDashboard() {
       labels: dias.map(d => d.slice(8)),
       datasets: [
         { label: 'Entregas', data: dias.map(d => diasMap[d].ent||0), backgroundColor: '#1a7a4a', borderRadius: 4 },
-        { label: '99App', data: dias.map(d => diasMap[d].app99||0), backgroundColor: '#8b5cf6', borderRadius: 4 }
+        { label: nomeAppCorridas, data: dias.map(d => diasMap[d].app99||0), backgroundColor: '#8b5cf6', borderRadius: 4 }
       ]
     },
     options: {
@@ -1053,19 +831,6 @@ function renderDashboard() {
 }
 
 // ═══════════════════════════════════════════════════════
-//  TABELA BAIRROS
-// ═══════════════════════════════════════════════════════
-function renderTabela() {
-  document.getElementById('tbody-bairros').innerHTML = Object.keys(BAIRROS).sort().map(b =>
-    `<tr><td>${b}</td><td class="preco-td">R$ ${BAIRROS[b].toFixed(2).replace('.',',')}</td></tr>`).join('');
-}
-function filtrarTabelaBairros(q) {
-  const filtrado = Object.keys(BAIRROS).sort().filter(b => b.toLowerCase().includes(q.toLowerCase()));
-  document.getElementById('tbody-bairros').innerHTML = filtrado.map(b =>
-    `<tr><td>${b}</td><td class="preco-td">R$ ${BAIRROS[b].toFixed(2).replace('.',',')}</td></tr>`).join('');
-}
-
-// ═══════════════════════════════════════════════════════
 //  MODAL
 // ═══════════════════════════════════════════════════════
 function fecharModal() { document.getElementById('modal-historico').classList.remove('aberto'); }
@@ -1081,6 +846,15 @@ function mostrarToast(msg) {
   t.textContent = msg; t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 2500);
 }
-</script>
-</body>
-</html>
+
+// ═══════════════════════════════════════════════════════
+//  INICIALIZAÇÃO — verifica sessão existente
+// ═══════════════════════════════════════════════════════
+window.onload = async () => {
+  // Verificar se já tem sessão ativa (usuário já logado)
+  const { data: { session } } = await db.auth.getSession();
+  if(session && session.user) {
+    await iniciarSessao(session.user);
+  }
+  // Se não tem sessão, a tela de login já está visível por padrão
+};
