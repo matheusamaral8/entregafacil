@@ -441,6 +441,7 @@ async function salvarEntrega() {
     nome: nome || 'Destinatário não informado',
     endereco, bairro, valor, data, status, obs,
     cliente_id: clienteId === '0' ? null : parseInt(clienteId),
+    pago: false,
     user_id: usuarioAtual.id
   };
 
@@ -611,6 +612,16 @@ async function toggleStatus(id) {
   renderListaDia(); renderInicio();
 }
 
+async function togglePago(id) {
+  const e = entregas.find(x => x.id === id);
+  if(!e) return;
+  e.pago = !e.pago;
+  if(modoOnline) await db.from('entregas').update({ pago: e.pago }).eq('id', id).eq('user_id', usuarioAtual.id);
+  salvarLocal(chaveLocal('entregas'), entregas);
+  renderListaDia(); renderInicio(); renderClientes();
+  mostrarToast(e.pago ? '✅ Marcada como paga!' : '⏳ Marcada como não paga');
+}
+
 // ═══════════════════════════════════════════════════════
 //  RENDERS
 // ═══════════════════════════════════════════════════════
@@ -634,6 +645,18 @@ function renderInicio() {
   document.getElementById('res-mes-99').textContent   = formatarMoeda(app99Mes);
   document.getElementById('res-mes-total').textContent = formatarMoeda(valMes + app99Mes);
 
+  // Card: valores a receber (entregas não pagas)
+  const naoPatagos = entregas.filter(e => !e.pago);
+  const totalAReceber = naoPatagos.reduce((s,e) => s + (e.valor||0), 0);
+  const cardReceber = document.getElementById('card-receber');
+  if(totalAReceber > 0) {
+    cardReceber.style.display = 'flex';
+    document.getElementById('res-a-receber').textContent = formatarMoeda(totalAReceber);
+    document.getElementById('res-a-receber-sub').textContent = naoPatagos.length + ' entrega' + (naoPatagos.length !== 1 ? 's' : '') + ' não paga' + (naoPatagos.length !== 1 ? 's' : '');
+  } else {
+    cardReceber.style.display = 'none';
+  }
+
   const rec = document.getElementById('lista-recentes');
   const ult = entregas.slice(0,5);
   rec.innerHTML = ult.length ? ult.map(e => cartaoEntrega(e, false)).join('') : vazioHtml('Nenhuma entrega ainda');
@@ -648,6 +671,9 @@ function renderListaDia() {
 
 function cartaoEntrega(e, comAcoes) {
   const cli = clientes.find(c => c.id === e.cliente_id);
+  const badgePago = e.pago
+    ? `<button class="pago-badge pago" onclick="togglePago(${e.id})">✓ Pago</button>`
+    : `<button class="pago-badge nao-pago" onclick="togglePago(${e.id})">$ A receber</button>`;
   return `<div class="entrega-item">
     <div class="entrega-info" style="flex:1;">
       <div class="nome">${e.nome || '—'}</div>
@@ -657,8 +683,12 @@ function cartaoEntrega(e, comAcoes) {
       ${e.obs ? `<div style="font-size:11px;color:var(--cinza-texto);margin-top:4px;">${e.obs}</div>` : ''}
       ${comAcoes ? `<div class="entrega-acoes">
         <button class="btn-sm" onclick="toggleStatus(${e.id})" style="background:var(--verde-claro);color:var(--verde);">${e.status==='entregue'?'✓ Entregue':'⏳ Pendente'}</button>
+        ${badgePago}
         <button class="btn-sm btn-danger" onclick="excluirEntrega(${e.id})">Excluir</button>
-      </div>` : `<span class="status ${e.status}" style="margin-top:5px;display:inline-block;">${e.status==='entregue'?'✓ Entregue':'⏳ Pendente'}</span>`}
+      </div>` : `<div style="display:flex;gap:6px;margin-top:5px;flex-wrap:wrap;align-items:center;">
+        <span class="status ${e.status}">${e.status==='entregue'?'✓ Entregue':'⏳ Pendente'}</span>
+        ${badgePago}
+      </div>`}
     </div>
     <div class="entrega-valor">${formatarMoeda(e.valor)}</div>
   </div>`;
@@ -668,8 +698,47 @@ function renderClientes() {
   const el = document.getElementById('lista-clientes');
   if(!clientes.length) { el.innerHTML = vazioHtml('Nenhuma empresa cadastrada'); return; }
   el.innerHTML = clientes.map(c => {
-    const entsCliente = entregas.filter(e => e.cliente_id === c.id);
+    const entsCliente = entregas
+      .filter(e => e.cliente_id === c.id)
+      .sort((a,b) => {
+        if(b.data !== a.data) return b.data.localeCompare(a.data);
+        return b.id - a.id;
+      });
     const totalRecebido = entsCliente.reduce((s,e) => s + (e.valor||0), 0);
+    const totalAReceber = entsCliente.filter(e => !e.pago).reduce((s,e) => s + (e.valor||0), 0);
+
+    // Agrupar por dia
+    const porDia = {};
+    entsCliente.forEach(e => {
+      if(!porDia[e.data]) porDia[e.data] = [];
+      porDia[e.data].push(e);
+    });
+    const diasOrdenados = Object.keys(porDia).sort((a,b) => b.localeCompare(a));
+
+    const historicoHtml = diasOrdenados.map(dia => {
+      const entsNoDia = porDia[dia];
+      const totalDia  = entsNoDia.reduce((s,e) => s + (e.valor||0), 0);
+      const itens     = entsNoDia.map(e => `
+        <div class="hist-dia-item">
+          <div class="hi-info">
+            <div class="hi-bairro">${e.bairro}</div>
+            <div class="hi-nome">${e.nome || '—'}${e.endereco ? ' · ' + e.endereco : ''}</div>
+          </div>
+          <div class="hi-direita">
+            <span class="hi-valor">${formatarMoeda(e.valor)}</span>
+            <button class="pago-badge ${e.pago ? 'pago' : 'nao-pago'}" onclick="togglePago(${e.id})">${e.pago ? '✓ Pago' : '$ A receber'}</button>
+          </div>
+        </div>`).join('');
+
+      return `<div class="hist-dia-grupo">
+        <div class="hist-dia-titulo">
+          <span>📅 ${formatarData(dia)} — ${entsNoDia.length} entrega${entsNoDia.length !== 1 ? 's' : ''}</span>
+          <span class="dia-total">${formatarMoeda(totalDia)}</span>
+        </div>
+        ${itens}
+      </div>`;
+    }).join('');
+
     return `<div class="cliente-card">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;">
         <div>
@@ -684,15 +753,13 @@ function renderClientes() {
         <div class="cli-stat">Entregas<span>${entsCliente.length}</span></div>
         <div class="cli-stat">Total recebido<span>${formatarMoeda(totalRecebido)}</span></div>
         ${entsCliente.length ? `<div class="cli-stat">Ticket médio<span>${formatarMoeda(totalRecebido/entsCliente.length)}</span></div>` : ''}
+        ${totalAReceber > 0 ? `<div class="cli-stat" style="background:var(--vermelho-claro);">A receber<span style="color:var(--vermelho);">${formatarMoeda(totalAReceber)}</span></div>` : ''}
       </div>
-      ${entsCliente.length ? `<div class="cli-hist-btn" onclick="toggleHistorico(${c.id})">▼ Ver histórico de entregas</div>
-      <div class="cli-historico" id="hist-${c.id}">
-        ${entsCliente.slice(0,20).map(e => `
-          <div class="cli-hist-item">
-            <span>${formatarData(e.data)} – ${e.bairro} – ${e.nome||'—'}</span>
-            <span style="font-weight:600;color:var(--verde);">${formatarMoeda(e.valor)}</span>
-          </div>`).join('')}
-      </div>` : ''}
+      ${entsCliente.length ? `
+        <div class="cli-hist-btn" onclick="toggleHistorico(${c.id})">▼ Ver histórico de entregas (${entsCliente.length})</div>
+        <div class="cli-historico" id="hist-${c.id}">
+          ${historicoHtml}
+        </div>` : ''}
     </div>`;
   }).join('');
 }
