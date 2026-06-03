@@ -646,7 +646,7 @@ function renderInicio() {
   document.getElementById('res-mes-total').textContent = formatarMoeda(valMes + app99Mes);
 
   // Card: valores a receber (entregas não pagas)
-  const naoPatagos = entregas.filter(e => !e.pago);
+  const naoPatagos = entregas.filter(e => e.pago === false);
   const totalAReceber = naoPatagos.reduce((s,e) => s + (e.valor||0), 0);
   const cardReceber = document.getElementById('card-receber');
   if(totalAReceber > 0) {
