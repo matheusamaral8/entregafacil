@@ -622,6 +622,18 @@ async function togglePago(id) {
   mostrarToast(e.pago ? '✅ Marcada como paga!' : '⏳ Marcada como não paga');
 }
 
+async function marcarTodasPagas(clienteId, dia) {
+  const pendentes = entregas.filter(e => e.cliente_id === clienteId && e.data === dia && !e.pago);
+  if (!pendentes.length) return;
+  for (const e of pendentes) {
+    e.pago = true;
+    if (modoOnline) await db.from('entregas').update({ pago: true }).eq('id', e.id).eq('user_id', usuarioAtual.id);
+  }
+  salvarLocal(chaveLocal('entregas'), entregas);
+  renderListaDia(); renderInicio(); renderClientes();
+  mostrarToast(`✅ ${pendentes.length} entrega${pendentes.length !== 1 ? 's' : ''} marcada${pendentes.length !== 1 ? 's' : ''} como paga${pendentes.length !== 1 ? 's' : ''}!`);
+}
+
 // ═══════════════════════════════════════════════════════
 //  RENDERS
 // ═══════════════════════════════════════════════════════
@@ -730,10 +742,14 @@ function renderClientes() {
           </div>
         </div>`).join('');
 
+      const todasPagas = entsNoDia.every(e => e.pago);
       return `<div class="hist-dia-grupo">
         <div class="hist-dia-titulo">
           <span>📅 ${formatarData(dia)} — ${entsNoDia.length} entrega${entsNoDia.length !== 1 ? 's' : ''}</span>
-          <span class="dia-total">${formatarMoeda(totalDia)}</span>
+          <div style="display:flex;align-items:center;gap:8px;">
+            ${!todasPagas ? `<button class="btn-marcar-pagas" onclick="marcarTodasPagas(${c.id}, '${dia}')">✅ Marcar todas pagas</button>` : ''}
+            <span class="dia-total">${formatarMoeda(totalDia)}</span>
+          </div>
         </div>
         ${itens}
       </div>`;
